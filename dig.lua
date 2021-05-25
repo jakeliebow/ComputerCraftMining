@@ -151,6 +151,10 @@ end
 local function handler( )
     able2Dig=true
     while(able2Dig) do
+        teleportMaterialsBack2Base()
+        while (turtle.getFuelLevel()<200) do 
+            refuelFromEnderChest()
+        end
         for n=1, height do
             for n=1,width do
                 mineRight()
