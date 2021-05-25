@@ -1,352 +1,212 @@
-local tArgs = { ... }
-if #tArgs ~= 1 then
-	print( "Usage: excavate <diameter>" )
-	return
+xCur=0
+maxXCur=0
+yCur=0
+zCur=0
+local function organize()
+    for i = 1,16 do
+        if turtle.getItemCount(i) > 0 and turtle.getItemCount(i) < 64 then
+          turtle.select(i)
+          for j = i+1,16 do
+            if turtle.compareTo(j) then
+              turtle.select(j)
+              turtle.transferTo(i)
+              turtle.select(i)
+            end
+          end
+        end
+      end
+      
+      for i = 1,16 do
+        if turtle.getItemCount(i) > 0 then
+          for j = 1,i do
+            if turtle.getItemCount(j) == 0 then
+              turtle.select(i)
+              turtle.transferTo(j)
+              break
+            end
+          end
+        end
+      end
 end
-
--- Mine in a quarry pattern until we hit something we can't dig
-local size = tonumber( tArgs[1] )
-if size < 1 then
-	print( "Excavate diameter must be positive" )
-	return
-end
-	
-local depth = 0
-local unloaded = 0
-local collected = 0
-
-local xPos,zPos = 0,0
-local xDir,zDir = 0,1
-
-local goTo -- Filled in further down
-local refuel -- Filled in further down
- 
-local function unload( _bKeepOneFuelStack )
-	print( "Unloading items..." )
-	for n=1,16 do
-		local nCount = turtle.getItemCount(n)
-		if nCount > 0 then
-			turtle.select(n)			
-			local bDrop = true
-			if _bKeepOneFuelStack and turtle.refuel(0) then
-				bDrop = false
-				_bKeepOneFuelStack = false
-			end			
-			if bDrop then
-				turtle.drop()
-				unloaded = unloaded + nCount
-			end
-		end
-	end
-	collected = 0
-	turtle.select(1)
-end
-
-local function returnSupplies()
-	local x,y,z,xd,zd = xPos,depth,zPos,xDir,zDir
-	print( "Returning to surface..." )
-	goTo( 0,0,0,0,-1 )
-	
-	local fuelNeeded = 2*(x+y+z) + 1
-	if not refuel( fuelNeeded ) then
-		unload( true )
-		print( "Waiting for fuel" )
-		while not refuel( fuelNeeded ) do
-			os.pullEvent( "turtle_inventory" )
-		end
-	else
-		unload( true )	
-	end
-	
-	print( "Resuming mining..." )
-	goTo( x,y,z,xd,zd )
-end
-
-local function collect()	
-	local bFull = true
-	local nTotalItems = 0
-	for n=1,16 do
-		local nCount = turtle.getItemCount(n)
-		if nCount == 0 then
-			bFull = false
-		end
-		nTotalItems = nTotalItems + nCount
-	end
-	
-	if nTotalItems > collected then
-		collected = nTotalItems
-		if math.fmod(collected + unloaded, 50) == 0 then
-			print( "Mined "..(collected + unloaded).." items." )
-		end
-	end
-	
-	if bFull then
-		print( "No empty slots left." )
-		return false
-	end
-	return true
-end
-
-function refuel( ammount )
-	local fuelLevel = turtle.getFuelLevel()
-	if fuelLevel == "unlimited" then
-		return true
-	end
-	
-	local needed = ammount or (xPos + zPos + depth + 2)
-	if turtle.getFuelLevel() < needed then
-		local fueled = false
-		for n=1,16 do
-			if turtle.getItemCount(n) > 0 then
-				turtle.select(n)
-				if turtle.refuel(1) then
-					while turtle.getItemCount(n) > 0 and turtle.getFuelLevel() < needed do
-						turtle.refuel(1)
-					end
-					if turtle.getFuelLevel() >= needed then
-						turtle.select(1)
-						return true
-					end
-				end
-			end
-		end
-		turtle.select(1)
-		return false
-	end
-	
-	return true
-end
-
-local function tryForwards()
-	if not refuel() then
-		print( "Not enough Fuel" )
-		returnSupplies()
-	end
-	
-	while not turtle.forward() do
-		if turtle.detect() then
-			if turtle.dig() then
-				if not collect() then
-					returnSupplies()
-				end
-			else
-				return false
-			end
-		elseif turtle.attack() then
-			if not collect() then
-				returnSupplies()
-			end
-		else
-			sleep( 0.5 )
-		end
-	end
-	
-	xPos = xPos + xDir
-	zPos = zPos + zDir
-	return true
-end
-
-local function tryDown()
-	if not refuel() then
-		print( "Not enough Fuel" )
-		returnSupplies()
-	end
-	
-	while not turtle.down() do
-		if turtle.detectDown() then
-			if turtle.digDown() then
-				if not collect() then
-					returnSupplies()
-				end
-			else
-				return false
-			end
-		elseif turtle.attackDown() then
-			if not collect() then
-				returnSupplies()
-			end
-		else
-			sleep( 0.5 )
-		end
-	end
-
-	depth = depth + 1
-	if math.fmod( depth, 10 ) == 0 then
-		print( "Descended "..depth.." metres." )
-	end
-
-	return true
-end
-
-local function turnLeft()
+local function moveLeft()
 	turtle.turnLeft()
-	xDir, zDir = -zDir, xDir
+    if turtle.forward() then
+        zCur=zCur-1
+    end
+    turtle.turnRight()
+end
+local function moveBackward()
+    if turtle.back() then
+        xCur=xCur-1
+    end
 end
 
-local function turnRight()
-	turtle.turnRight()
-	xDir, zDir = zDir, -xDir
+local function moveRight()
+    turtle.turnRight()
+    if turtle.forward() then
+        zCur=zCur+1
+    end
+    turtle.turnLeft()
 end
 
-function goTo( x, y, z, xd, zd )
-	while depth > y do
-		if turtle.up() then
-			depth = depth - 1
-		elseif turtle.digUp() or turtle.attackUp() then
-			collect()
-		else
-			sleep( 0.5 )
-		end
-	end
-
-	if xPos > x then
-		while xDir ~= -1 do
-			turnLeft()
-		end
-		while xPos > x do
-			if turtle.forward() then
-				xPos = xPos - 1
-			elseif turtle.dig() or turtle.attack() then
-				collect()
-			else
-				sleep( 0.5 )
-			end
-		end
-	elseif xPos < x then
-		while xDir ~= 1 do
-			turnLeft()
-		end
-		while xPos < x do
-			if turtle.forward() then
-				xPos = xPos + 1
-			elseif turtle.dig() or turtle.attack() then
-				collect()
-			else
-				sleep( 0.5 )
-			end
-		end
-	end
-	
-	if zPos > z then
-		while zDir ~= -1 do
-			turnLeft()
-		end
-		while zPos > z do
-			if turtle.forward() then
-				zPos = zPos - 1
-			elseif turtle.dig() or turtle.attack() then
-				collect()
-			else
-				sleep( 0.5 )
-			end
-		end
-	elseif zPos < z then
-		while zDir ~= 1 do
-			turnLeft()
-		end
-		while zPos < z do
-			if turtle.forward() then
-				zPos = zPos + 1
-			elseif turtle.dig() or turtle.attack() then
-				collect()
-			else
-				sleep( 0.5 )
-			end
-		end	
-	end
-	
-	while depth < y do
-		if turtle.down() then
-			depth = depth + 1
-		elseif turtle.digDown() or turtle.attackDown() then
-			collect()
-		else
-			sleep( 0.5 )
-		end
-	end
-	
-	while zDir ~= zd or xDir ~= xd do
-		turnLeft()
-	end
+local function moveForward() 
+    if turtle.forward() then
+        xCur=xCur+1
+        if xCur>maxXCur then
+            maxXCur=xCur
+        end
+    end
+end
+local function moveUp()
+    if turtle.up() then 
+        yCur=yCur+1
+    end
+end
+local function moveDown()
+    canGoDown=turtle.down()
+    if canGoDown then 
+        yCur=yCur-1
+    end
+    return canGoDown
 end
 
-if not refuel() then
-	print( "Out of Fuel" )
-	return
+local function mineForward( )
+    turtle.dig()
+    turtle.suck()
+end
+local function mineDown( )
+    return turtle.digDown()
+end
+local function mineRight( )
+    turtle.turnRight()
+    turtle.dig()
+    turtle.suck()
+    turtle.turnLeft()
+end
+local function mineLeft( )
+    turtle.turnLeft()
+    turtle.dig()
+    turtle.suck()
+    turtle.turnRight()
+end
+local function mineBackward( )
+    turtle.turnLeft()
+    turtle.turnLeft()
+    turtle.dig()
+    turtle.suck()
+    turtle.turnRight()
+    turtle.turnRight()
 end
 
-print( "Excavating..." )
-
-local reseal = false
-turtle.select(1)
-if turtle.digDown() then
-	reseal = true
+local function unload( )
+    print( "Unloading items..." )
+    turtle.turnLeft()
+    turtle.turnLeft()
+	for n=1,16 do
+        turtle.select(n)			
+        turtle.drop()
+    end
+    turtle.turnLeft()
+    turtle.turnLeft()
 end
 
-local alternate = 0
-local done = false
-while not done do
-	for n=1,size do
-		for m=1,size-1 do
-			if not tryForwards() then
-				done = true
-				break
-			end
-		end
-		if done then
-			break
-		end
-		if n<size then
-			if math.fmod(n + alternate,2) == 0 then
-				turnLeft()
-				if not tryForwards() then
-					done = true
-					break
-				end
-				turnLeft()
-			else
-				turnRight()
-				if not tryForwards() then
-					done = true
-					break
-				end
-				turnRight()
-			end
-		end
-	end
-	if done then
-		break
-	end
-	
-	if size > 1 then
-		if math.fmod(size,2) == 0 then
-			turnRight()
-		else
-			if alternate == 0 then
-				turnLeft()
-			else
-				turnRight()
-			end
-			alternate = 1 - alternate
-		end
-	end
-	
-	if not tryDown() then
-		done = true
-		break
-	end
+local function teleportMaterialsBack2Base()
+    turtle.select(2)
+    turtle.placeUp()
+    for n=4,16 do
+        turtle.select(n)			
+        turtle.dropUp()
+    end
+    turtle.select(2)
+    turtle.digUp()
+end
+local function refuelFromEnderChest()
+    turtle.select(1)
+    turtle.placeUp()
+    while (turtle.suckUp()==true) do
+        print( "big suck energy" )
+    end
+    for n=1,16 do
+        turtle.select(n)
+        turtle.refuel()
+    end
+    organize()
+    for n=1,16 do
+        turtle.select(n)	
+        if turtle.getItemDetail()["name"]=="minecraft:bucket" then
+            turtle.transferTo(10)
+            turtle.select(1)
+            turtle.digUp()
+            break
+        end
+    end
+    turtle.select(3)
+    turtle.placeUp()
+    turtle.select(10)
+    turtle.dropUp()
+    turtle.select(3)
+    turtle.digUp()
+    
+end
+local function handler( )
+    able2Dig=true
+    while(able2Dig) do
+        for n=1, height do
+            for n=1,width do
+                mineRight()
+                moveRight()
+            end
+            mineForward()
+            moveForward()
+            for n=1,width do
+                mineLeft()
+                moveLeft()
+            end
+            mineForward()
+            moveForward()
+        end
+        moveBackward() -- erase offsetted movement by above movement
+        mineDown()
+        if moveDown()==false then
+            able2Dig=false
+            break
+        end
+        for n=1, height do
+            for n=1,width do
+                mineRight()
+                moveRight()
+            end
+            mineBackward()
+            moveBackward()
+            for n=1,width do
+                mineLeft()
+                moveLeft()
+            end
+            mineBackward()
+            moveBackward()
+        end
+        moveForward()
+        mineDown()
+        if moveDown()==false then
+            able2Dig=false
+            break
+        end
+    end
+    while (yCur~=0) do
+        moveUp()
+    end
+    while (xCur~=maxXCur) do
+        mineForward()
+        moveForward()
+    end
+    
 end
 
-print( "Returning to surface..." )
+--while (1==1) do
+width=1
+height=1
+--handler()
+--end
 
--- Return to where we started
-goTo( 0,0,0,0,-1 )
-unload( false )
-goTo( 0,0,0,0,1 )
-
--- Seal the hole
-if reseal then
-	turtle.placeDown()
-end
-
-print( "Mined "..(collected + unloaded).." items total." )
+teleportMaterialsBack2Base()
+refuelFromEnderChest()
