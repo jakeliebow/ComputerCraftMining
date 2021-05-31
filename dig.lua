@@ -152,7 +152,7 @@ local function handler( )
     able2Dig=true
     while(able2Dig) do
         teleportMaterialsBack2Base()
-        while (turtle.getFuelLevel()<200) do 
+        while (turtle.getFuelLevel()<300 ) do -- wiggle room above 16*16
             refuelFromEnderChest()
         end
         for n=1, height do
