@@ -2,6 +2,8 @@ xCur=0
 maxXCur=0
 yCur=0
 zCur=0
+width=15
+height=8
 local function organize()
     for i = 1,16 do
         if turtle.getItemCount(i) > 0 and turtle.getItemCount(i) < 64 then
@@ -28,35 +30,28 @@ local function organize()
         end
       end
 end
-local function moveLeft()
-	turtle.turnLeft()
-    if turtle.forward() then
-        zCur=zCur-1
-    end
-    turtle.turnRight()
-end
-local function moveBackward()
-    if turtle.back() then
-        xCur=xCur-1
-    end
-end
-
-local function moveRight()
-    turtle.turnRight()
-    if turtle.forward() then
-        zCur=zCur+1
-    end
-    turtle.turnLeft()
-end
-
-local function moveForward() 
-    if turtle.forward() then
-        xCur=xCur+1
-        if xCur>maxXCur then
-            maxXCur=xCur
+local function mineAndMoveZAxisPositive( forOrBack)
+    if forOrBack==true then turtle.turnRight() else turtle.turnLeft() end
+    for n=1,width do
+        turtle.dig()
+        if turtle.forward() then
+            zCur=zCur+1
         end
     end
+    if forOrBack==false then turtle.turnRight() else turtle.turnLeft() end
 end
+
+local function mineAndMoveZAxisNegative(forOrBack)
+    if forOrBack==false then turtle.turnRight() else turtle.turnLeft() end
+    for n=1,width do
+        turtle.dig()
+        if turtle.forward() then
+            zCur=zCur-1
+        end
+    end
+    if forOrBack==true then turtle.turnRight() else turtle.turnLeft() end
+end
+
 local function moveUp()
     if turtle.up() then 
         yCur=yCur+1
@@ -70,45 +65,7 @@ local function moveDown()
     return canGoDown
 end
 
-local function mineForward( )
-    turtle.dig()
-    turtle.suck()
-end
-local function mineDown( )
-    return turtle.digDown()
-end
-local function mineRight( )
-    turtle.turnRight()
-    turtle.dig()
-    turtle.suck()
-    turtle.turnLeft()
-end
-local function mineLeft( )
-    turtle.turnLeft()
-    turtle.dig()
-    turtle.suck()
-    turtle.turnRight()
-end
-local function mineBackward( )
-    turtle.turnLeft()
-    turtle.turnLeft()
-    turtle.dig()
-    turtle.suck()
-    turtle.turnRight()
-    turtle.turnRight()
-end
 
-local function unload( )
-    print( "Unloading items..." )
-    turtle.turnLeft()
-    turtle.turnLeft()
-	for n=1,16 do
-        turtle.select(n)			
-        turtle.drop()
-    end
-    turtle.turnLeft()
-    turtle.turnLeft()
-end
 
 local function teleportMaterialsBack2Base()
     turtle.select(2)
@@ -148,69 +105,96 @@ local function refuelFromEnderChest()
     turtle.digUp()
     
 end
+
+local function mineForwardLayer()
+    forOrBack=true
+    for n=1,height do
+        turtle.dig()
+        if turtle.forward() then
+            xCur=xCur+1
+            if xCur>maxXCur then
+                maxXCur=xCur
+            end
+        end
+        mineAndMoveZAxisPositive(forOrBack)
+        turtle.dig()
+        if turtle.forward() then
+            xCur=xCur+1
+            if xCur>maxXCur then
+                maxXCur=xCur
+            end
+        end
+        mineAndMoveZAxisNegative(forOrBack)
+    end
+end
+local function move2Surface()
+    while (yCur~=0) do
+        moveUp()
+    end
+end
+local function move2maxX()
+    while (xCur<maxXCur) do
+        turtle.dig()
+        moveForward()
+    end
+end
+
+local function moveForward() 
+    if turtle.forward() then
+        xCur=xCur+1
+    end
+end
+local function mineBackwardLayer()
+    turtle.turnRight()
+    turtle.turnRight()
+    forOrBack=false
+    for n=1,height do
+        mineAndMoveZAxisPositive(forOrBack)
+        turtle.dig()
+        if turtle.forward() then
+            xCur=xCur-1
+        end
+        mineAndMoveZAxisNegative(forOrBack)
+        turtle.dig()
+        if turtle.forward() then
+            xCur=xCur-1
+        end
+    end
+    turtle.turnRight()
+    turtle.turnRight()
+end
+
+
+
 local function handler( )
     able2Dig=true
     while(able2Dig) do
         teleportMaterialsBack2Base()
-        while (turtle.getFuelLevel()<300 ) do -- wiggle room above 16*16
+        while (turtle.getFuelLevel() < 400 ) do -- wiggle room above 16*16
             refuelFromEnderChest()
         end
-        for n=1, height do
-            for n=1,width do
-                mineRight()
-                moveRight()
-            end
-            mineForward()
-            moveForward()
-            for n=1,width do
-                mineLeft()
-                moveLeft()
-            end
-            mineForward()
-            moveForward()
-        end
-        moveBackward() -- erase offsetted movement by above movement
-        mineDown()
-        if moveDown()==false then
-            able2Dig=false
-            break
-        end
-        for n=1, height do
-            for n=1,width do
-                mineRight()
-                moveRight()
-            end
-            mineBackward()
-            moveBackward()
-            for n=1,width do
-                mineLeft()
-                moveLeft()
-            end
-            mineBackward()
-            moveBackward()
-        end
-        moveForward()
-        mineDown()
-        if moveDown()==false then
-            able2Dig=false
-            break
-        end
+        
+        mineForwardLayer()
+
+        turtle.digDown()
+        if moveDown() then no="op" else break end
+
+        mineBackwardLayer()
+
+        turtle.digDown()
+        if moveDown() then no="op" else break end
+
     end
-    while (yCur~=0) do
-        moveUp()
-    end
-    while (xCur~=maxXCur) do
-        mineForward()
-        moveForward()
-    end
+
+    move2Surface()
+    move2maxX()
     
 end
 
---while (1==1) do
-width=1
-height=1
---handler()
---end
 
-teleportMaterialsBack2Base()
-refuelFromEnderChest()
+
+while (1==1) do
+    handler()
+end
+
+-- this is just a buffer buffer
